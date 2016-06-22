@@ -61,9 +61,12 @@ function makeactor(t,mt,s,x,y,w,h,an)
 	actor.w=w or 1
 	actor.h=h or 1
 	actor.an=an or 0
---	actor.vec={0,0}
+	actor.vec={0,0}
 	actor.delta=timer
 	actor.step=0
+	actor.movex=0
+	actor.movey=0
+	actor.right=false
 	add(actors,actor)
 	return actor
 end
@@ -85,7 +88,7 @@ end
 
 function drawactor(a)
 	pal(13,0)
-	spr(a.s+a.an*(timer/12)%2,a.x*8,a.y*8-(a.h)*4,a.w,a.h)
+	spr(a.s+a.an*(timer/12)%2,a.x*8+a.movex*8,a.y*8-(a.h)*4+a.movey*8,a.w,a.h,a.right)
 	pal()
 end
 
@@ -95,8 +98,8 @@ end
 
 function collision(a,enemy)
 	if a.x>enemy.x+enemy.hitbox.x then
-	if a.x<enemy.x+enemy.hitbox.x+enemy.hitbox.w then--+a.vec[1]*a.vel
-	if a.y>enemy.y+enemy.hitbox.y then---a.vec[2]*a.vel
+	if a.x<enemy.x+enemy.hitbox.x+enemy.hitbox.w then
+	if a.y>enemy.y+enemy.hitbox.y then
 	if a.y<enemy.y+enemy.hitbox.y+enemy.hitbox.h then
 		return true
 	end
@@ -150,35 +153,35 @@ function checkstuck(ch,x,y)
 end
 
 function controlactor(a)
-	local vec={0,0}
+--	local vec={0,0}
 	if a.mt==enums.key then
-		if     btn(0) then vec[1]=-1
-		elseif btn(1) then vec[1]= 1
-		elseif btn(2) then vec[2]=-1
-		elseif btn(3) then vec[2]= 1
+		if     btn(0) then a.vec[1]=-1
+		elseif btn(1) then a.vec[1]= 1
+		elseif btn(2) then a.vec[2]=-1
+		elseif btn(3) then a.vec[2]= 1
 		end
 	elseif a.mt==enums.ai then
-		vec=direction(flr(rnd(4)))
+		a.vec=direction(flr(rnd(4)))
 	end
 	if a.t==enums.crawler then
-		local cn=checkneighbours(0,a.x+vec[1],a.y+vec[2])
+		local cn=checkneighbours(0,a.x+a.vec[1],a.y+a.vec[2])
 		if cn==-1 then
 			--exit found
 			pass+=1
 			del(actors,crawler)
 		elseif cn<2 then
 			sfx(1)
-			a.x+=vec[1]
-			a.y+=vec[2]
+			a.x+=a.vec[1]
+			a.y+=a.vec[2]
 			mset(a.x,a.y,0)
 			if mget(a.x,a.y-1)==1 then
 				mset(a.x,a.y-1,2)
 			end
 			a.step+=1
 			if a.step>#steps then
-				add(steps,vec)
+				add(steps,a.vec)
 			else
-				steps[a.step]=vec
+				steps[a.step]=a.vec
 			end
 		elseif checkstuck(0,a.x,a.y)<=0 then
 			mset(a.x,a.y,17)
@@ -203,9 +206,31 @@ function controlactor(a)
 				a.y-=steps[a.step+1][2]
 			end
 		end
-	else
-		a.x+=vec[1]
-		a.y+=vec[2]
+	elseif timer%20==0 then
+		if mget(a.x+a.vec[1],a.y+a.vec[2])==0 then
+			a.x+=a.vec[1]
+			a.y+=a.vec[2]
+			a.movex=-a.vec[1]
+			a.movey=-a.vec[2]
+			if a.vec[1]>0 then
+				a.right=true
+			else
+				a.right=false
+			end
+		else
+			a.movex=0
+			a.movey=0
+		end
+	end
+	if a.movex<0 then
+		a.movex+=1/20
+	elseif a.movex>0 then
+		a.movex-=1/20
+	end
+	if a.movey<0 then
+		a.movey+=1/20
+	elseif a.movey>0 then
+		a.movey-=1/20
 	end
 end
 
