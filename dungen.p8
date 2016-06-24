@@ -92,8 +92,8 @@ end
 
 function drawactor(a)
 	pal(13,0)
-	--spr(a.s+a.weapon.equip*2+a.an*(timer/12)%2,a.x*8+a.movex*8,a.y*8-(a.h)*4+a.movey*8,a.w,a.h,a.right)
-	spr(a.s+a.weapon.equip*2+a.an*(timer/12)%2,a.x*8+a.movex*8,a.y*8-8+a.movey*8,a.w,a.h,a.right)
+	spr(a.s+a.weapon.equip*2+a.an*(timer/12)%2,a.x*8+a.movex*8,a.y*8-(a.h-1)*8+a.movey*8,a.w,a.h,a.right)
+	--spr(a.s+a.weapon.equip*2+a.an*(timer/12)%2,a.x*8+a.movex*8,a.y*8-8+a.movey*8,a.w,a.h,a.right)
 	if a.weapon.equip>0 then
 		spr(a.s+a.weapon.equip*4+a.an*(timer/12)%2,a.x*8+a.weapon.xoff+a.movex*8,a.y*8-(a.h)*4+a.movey*8,a.w,a.h,a.right)
 	end
