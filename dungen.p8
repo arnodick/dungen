@@ -4,7 +4,8 @@ __lua__
 --dungen
 --by ashley pringle
 cartdata("dungen")
-debug=true
+debug=false
+dset(63,1)
 
 function _init()
 	state=0
@@ -22,6 +23,7 @@ function _init()
 	--movement types
 	enums.key=1
 	enums.rand=2
+	enums.auto=3
 	
 	--game states
 	enums.title=1
