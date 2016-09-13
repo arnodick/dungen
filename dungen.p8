@@ -5,9 +5,9 @@ __lua__
 --by ashley pringle
 cartdata("dungen")
 debug=false
-dset(63,1)
 
 function _init()
+	dset(63,4)
 	state=0
 	timer=0
 	changestate(state)
