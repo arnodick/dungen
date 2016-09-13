@@ -4,7 +4,7 @@ __lua__
 --dungen
 --by ashley pringle
 cartdata("dungen")
-debug=true
+debug=false
 
 function _init()
 	state=0
@@ -334,7 +334,7 @@ function _update()
 					
 				end
 			end
-			player=makeactor(enums.player,enums.key,97,spawn.x,spawn.y,1,2,8,1)
+			player=makeactor(enums.player,mget(127,31),97,spawn.x,spawn.y,1,2,8,1)
 			sfx(2)
 			pass+=1
 		elseif pass==3 then
@@ -417,7 +417,7 @@ function debug_u()
 	debug_l[2]="mem="..stat(0)
 	debug_l[3]="cpu="..stat(1)
 	debug_l[4]="actors:"..#actors
-	debug_l[5]=dget(63)
+	debug_l[5]=mget(127,31)
 
 --	debug_l[5]="step:"..actors[1].step
 
