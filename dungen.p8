@@ -4,7 +4,7 @@ __lua__
 --dungen
 --by ashley pringle
 cartdata("dungen")
-debug=true
+debug=false
 
 function _init()
 	state=0
@@ -45,15 +45,6 @@ function _init()
 	hud.hp.y=4
 end
 
-function generatelandscape(gh,hh,gw,hw,hs,first)
-end
-
-function distance(x1,y1,x2,y2)
-	--need to div by 10 bc numbers were getting way to big and overflowing, giving negatives output
-	local a=(x2-x1)/10  local b=(y2-y1)/10
-	return (a*a+b*b)
-end
-
 function makeactor(t,mt,s,x,y,w,h,sp,an)
 	local actor={}
 	actor.t=t
@@ -78,14 +69,6 @@ function makeactor(t,mt,s,x,y,w,h,sp,an)
 	return actor
 end
 
-function makehitbox(a,x,y,w,h)
-	a.hitbox={}
-	a.hitbox.x=x
-	a.hitbox.y=y
-	a.hitbox.w=w
-	a.hitbox.h=h
-end
-
 function makefacade(x,y)
 	f={}
 	f.x=x
@@ -105,19 +88,6 @@ end
 
 function drawfacade(f)
 	spr(12,f.x*8,f.y*8)
-end
-
-function collision(a,enemy)
-	if a.x>enemy.x+enemy.hitbox.x then
-	if a.x<enemy.x+enemy.hitbox.x+enemy.hitbox.w then
-	if a.y>enemy.y+enemy.hitbox.y then
-	if a.y<enemy.y+enemy.hitbox.y+enemy.hitbox.h then
-		return true
-	end
-	end
-	end
-	end
-	return false
 end
 
 function direction(d)
@@ -238,6 +208,9 @@ function controlactor(a)
 			end
 		end
 	elseif a.t==enums.enemy then
+		if a.x==player.x and a.y==player.y then
+			del(actors,player)
+		end
 		if timer%a.sp==0 then
 			if mget(a.x+a.vec[1],a.y+a.vec[2])==0 then
 				a.x+=a.vec[1]
@@ -295,10 +268,6 @@ function controlactor(a)
 end
 
 function damageactor(a,d)
-
-end
-
-function spawnentities()
 
 end
 
