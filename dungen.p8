@@ -64,6 +64,7 @@ function makeactor(t,mt,s,x,y,w,h,sp,an)
 	actor.right=false--todo: get rid of this
 	actor.weapon={}
 	actor.weapon.equip=0x0
+	actor.weapon.x=actor.x+actor.movex
 	actor.weapon.xoff=-8
 	add(actors,actor)
 	return actor
@@ -235,8 +236,11 @@ function controlactor(a)
 		end
 	elseif a.t==enums.ladder then
 		if player.x==a.x and player.y==a.y then
-			sfx(6)
-			changestate(state)
+			if #transitions==0 then
+				sfx(6)
+				maketransition(64)
+			end
+			--changestate(state)
 		end
 	end
 	if a.movex<0 then
@@ -320,6 +324,7 @@ function _update()
 			pass+=1
 		elseif pass==3 then
 			foreach(actors,controlactor)
+			foreach(transitions,controltransition)
 			if btnp(4) then
 				--changestate(state)
 			end
@@ -339,6 +344,7 @@ function _draw()
 	map(0,0,0,0,16,16)
 	foreach(actors,drawactor)
 	foreach(facades,drawfacade)
+	foreach(transitions,drawtransition)
 	if debug then
 		for a=1,#debug_l do
 			print(debug_l[a],cam[1]+0,cam[2]+(a-1)*6,8)
@@ -379,6 +385,7 @@ function changestate(s)
 	
 	actors={}
 	facades={}
+	transitions={}
 	introtext={}
 	titletimer=0
 	spawn={}
@@ -394,15 +401,57 @@ function changestate(s)
 	end
 end
 
+function maketransition(n)
+	local t={}
+	t.delta=timer
+	t.blocks={}
+	for a=1,n do
+		add(t.blocks,false)
+	end
+	add(transitions,t)
+end
+
+function controltransition(t)
+	local d=timer-t.delta
+	if d>=#t.blocks-1 then
+		transitions={}
+		changestate(state)
+	end
+	--if d%3==0 then
+	local r=rndint(#t.blocks)+1
+	while t.blocks[r]==true do
+		r=rndint(#t.blocks)
+	end
+	t.blocks[r]=true
+	--end
+end
+
+function drawtransition(t)
+	for a=0,#t.blocks-1 do
+		if t.blocks[a+1]==true then
+			--rectfill(a*32,flr(a/4)*32,a*32+32,flr(a/4)*32+32,14)
+			local mult=128/sqrt(#t.blocks)
+			local x=(a%sqrt(#t.blocks))*mult
+			local y=flr(a/sqrt(#t.blocks))*mult
+			rectfill(x,y,x+mult,y+mult,0)
+		end
+	end
+end
+
 function debug_u()
 	debug_l[1]=timer
 	debug_l[2]="mem="..stat(0)
 	debug_l[3]="cpu="..stat(1)
 	debug_l[4]="actors:"..#actors
-	debug_l[5]=mget(127,31)
-	debug_l[6]=score[1]
-	debug_l[7]=score[2]
-	debug_l[8]=score[3]
+	if player!=nil then
+		debug_l[5]="plr x:"..player.x
+		debug_l[6]="plr y:"..player.y
+	end
+--	debug_l[7]=mget(127,31)
+	debug_l[7]="tr:"..#transitions
+	debug_l[8]=score[1]
+	debug_l[9]=score[2]
+	debug_l[10]=score[3]
 
 --	debug_l[5]="step:"..actors[1].step
 
