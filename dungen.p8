@@ -2,9 +2,11 @@ pico-8 cartridge // http://www.pico-8.com
 version 33
 __lua__
 --dungen
+--dungen
 --by ashley pringle
 cartdata("dungen")
-debug=true
+debug=false
+debugs=true
 
 enums={}
 --actor types
@@ -57,7 +59,6 @@ function makeactor(t,mt,s,x,y,w,h,sp,an)
 	actor.sp=sp or 1
 	actor.an=an or 0
 	actor.vec={0,0}
-	actor.delta=timer
 	actor.step=0
 	--if actor.t==enums.player then
 	--	actor.step=1
@@ -74,7 +75,7 @@ function makeactor(t,mt,s,x,y,w,h,sp,an)
 end
 
 function makefacade(x,y)
-	f={}
+	local f={}
 	f.x=x
 	f.y=y
 	add(facades,f)
@@ -94,7 +95,7 @@ function drawfacade(f)
 	spr(12,f.x*8,f.y*8)
 end
 
---0=left,1=right,2=down,3=up
+--0=left,1=right,2=up,3=down
 function direction(d)
 	local dire={0,0}
 	if d==0 then dire[1]=-1 end
@@ -104,11 +105,14 @@ function direction(d)
 	return dire
 end
 
+-- returns count of free spaces around a cell
+-- -1=exit found
+-- 0 - 4 = amount of adj spaces that are 0 or no-go
 function checkneighbours(ch,x,y)
 	local cell=mget(x,y)
-	if cell==0 or cell==17 or cell==19 then
-		return 4
-	elseif cell==18 then
+	if cell==ch or cell==17 or cell==19 then--if cell at centre of check is 0 or no-go, return 4
+		return 4--if this cell is 0 or no-go, return highest adj count (4)
+	elseif cell==18 then--18=exit found
 		return -1
 	end
 	local adj=0
@@ -116,7 +120,7 @@ function checkneighbours(ch,x,y)
 	for a=0,3 do
 		dire=direction(a)
 		local cell=mget(x+dire[1],y+dire[2])
-		if cell==ch
+		if cell==ch--if adj cell is 0 or no-go, add 1 to return adj count
 		or cell==17
 		or cell==19
 		then
@@ -126,12 +130,14 @@ function checkneighbours(ch,x,y)
 	return adj
 end
 
+-- checks if a cell has any adjacent cells that are viable routes for crawler
+-- if a neighbour cell has too many free spaces next to it (>1) then it is not a viable option, already traversed by crawler
+-- returns # of vialbe routes
 function checkstuck(ch,x,y)
 	local routes=4
 	for i=0,3 do
 		local dire=direction(i)
-		if checkneighbours(ch,x+dire[1],y+dire[2])>=2
-		then
+		if checkneighbours(ch,x+dire[1],y+dire[2])>=2 then
 			routes-=1
 		end
 	end
@@ -160,37 +166,35 @@ function controlactor(a)
 		end
 	end
 	if a.t==enums.crawler then
-		local cn=checkneighbours(0,a.x+a.vec[1],a.y+a.vec[2])
-		if cn==-1 then
-			--exit found
+		local cn=checkneighbours(0,a.x+a.vec[1],a.y+a.vec[2])--check destination cell for amount of adjacent free spaces
+		if cn==-1 then--exit found, add this final step, move to next pass (item creation?) and remove crawler
 			add(steps,a.vec)
 			pass+=1
 			del(actors,crawler)
-		elseif cn<2 then
+		elseif cn<2 then--there is 0 or 1 empty adjacent cells, move crawler to dest and set it it to 0 (free space)
 			sfx(1)
 			a.x+=a.vec[1]
 			a.y+=a.vec[2]
 			mset(a.x,a.y,0)
-			if mget(a.x,a.y-1)==1 then
+			if mget(a.x,a.y-1)==1 then--if the cell above the new free space is solid, make it into a wall cell
 				mset(a.x,a.y-1,2)
 			end
 			a.step+=1
 			if a.step>#steps then
 				add(steps,a.vec)
-			else
-				steps[a.step]=a.vec
+	--		else
+			--	steps[a.step]={a.vec[1],a.vec[2]}--can this cause problems? should we do {vec1,vec2}?
 			end
-		elseif checkstuck(0,a.x,a.y)<=0 then
+		elseif checkstuck(0,a.x,a.y)<=0 then--if there are no vialbe routes, set cell to dead end (17)
 			mset(a.x,a.y,17)
-			if mget(a.x,a.y-1)==0 or mget(a.x,a.y-1)==1 or mget(a.x,a.y-1)==2	then
+			if mget(a.x,a.y-1)==0 or mget(a.x,a.y-1)==1 or mget(a.x,a.y-1)==2	then--if there is a wall above dead end cell, set it to 19 (why?)
 				mset(a.x,a.y,19)
 			end
 			if mget(a.x,a.y+1)==19 then
 				mset(a.x,a.y+1,17)
 			end
-			a.step-=1
-			if a.step<=0 then
-				--exit couldn't be found
+			a.step-=1--set step back to last step
+			if a.step<=0 then--exit couldn't be found
 				sfx(4)
 				changestate(state)
 			else
@@ -199,8 +203,9 @@ function controlactor(a)
 --			a.x-=steps[a.step][1]
 --			a.y-=steps[a.step][2]
 				sfx(3)
-				a.x-=steps[a.step+1][1]
+				a.x-=steps[a.step+1][1]--undo last move step so crawler goes backwards
 				a.y-=steps[a.step+1][2]
+				deli(steps)
 			end
 		end
 	elseif a.t==enums.player then
@@ -345,7 +350,7 @@ function _update()
 		end
 	end
 	timer+=1
-	if debug then
+	if debug or debugs then
 		debug_u()
 	end
 end
@@ -363,12 +368,21 @@ function _draw()
 		for a=1,#debug_l do
 			print(debug_l[a],cam[1]+0,cam[2]+(a-1)*6,8)
 		end
-		for a=1,#debug_s do
-			print(a.." "..debug_s[a],cam[1]+50+flr(a/22)*50,cam[2]+(a-1)*6-flr(a/22)*125,8)
-		end
 		for a=1,#actors do
 			local ac=actors[a]
 			rect(ac.x*8,ac.y*8,ac.x*8+8,ac.y*8+8,8)
+		end
+	end
+	if debugs then
+								color(12)
+		for a=1,#debug_s do
+			dsc=8
+			if player then
+				if player.step==a then
+					dsc=12
+				end
+			end
+			print(a.." "..debug_s[a],cam[1]+flr(a/22)*35,cam[2]+(a-1)*6-flr(a/22)*127,dsc)
 		end
 	end
 end
