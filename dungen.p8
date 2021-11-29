@@ -110,7 +110,8 @@ end
 -- 0 - 4 = amount of adj spaces that are 0 or no-go
 function checkneighbours(ch,x,y)
 	local cell=mget(x,y)
-	if cell==ch or cell==17 or cell==19 then--if cell at centre of check is 0 or no-go, return 4
+--	if cell==ch or cell==17 or cell==19 then--if cell at centre of check is 0 or no-go, return 4
+	if cell==ch or cell==17 then--if cell at centre of check is 0 or no-go, return 4
 		return 4--if this cell is 0 or no-go, return highest adj count (4)
 	elseif cell==18 then--18=exit found
 		return -1
@@ -122,7 +123,7 @@ function checkneighbours(ch,x,y)
 		local cell=mget(x+dire[1],y+dire[2])
 		if cell==ch--if adj cell is 0 or no-go, add 1 to return adj count
 		or cell==17
-		or cell==19
+--		or cell==19
 		then
 			adj+=1
 		end
@@ -171,7 +172,8 @@ function controlactor(a)
 			add(steps,a.vec)
 			pass+=1
 			del(actors,crawler)
-		elseif cn<2 then--there is 0 or 1 empty adjacent cells, move crawler to dest and set it it to 0 (free space)
+			crawler=nil
+		elseif cn<2 then--there is 0 or 1 empty adjacent cells, move crawler to dest and set dest cell to 0 (free space)
 			sfx(1)
 			a.x+=a.vec[1]
 			a.y+=a.vec[2]
@@ -187,21 +189,11 @@ function controlactor(a)
 			end
 		elseif checkstuck(0,a.x,a.y)<=0 then--if there are no vialbe routes, set cell to dead end (17)
 			mset(a.x,a.y,17)
-			if mget(a.x,a.y-1)==0 or mget(a.x,a.y-1)==1 or mget(a.x,a.y-1)==2	then--if there is a wall above dead end cell, set it to 19 (why?)
-				mset(a.x,a.y,19)
-			end
-			if mget(a.x,a.y+1)==19 then
-				mset(a.x,a.y+1,17)
-			end
 			a.step-=1--set step back to last step
 			if a.step<=0 then--exit couldn't be found
 				sfx(4)
 				changestate(state)
 			else
---this gives more organic levels
---doesn't go directly back, does second last step back instead, throws everything off and makes it look neat
---			a.x-=steps[a.step][1]
---			a.y-=steps[a.step][2]
 				sfx(3)
 				a.x-=steps[a.step+1][1]--undo last move step so crawler goes backwards
 				a.y-=steps[a.step+1][2]
@@ -302,7 +294,8 @@ function _update()
 			for b=0,15 do
 				for a=0,15 do
 					local cell=mget(a,b)
-					if cell==17 or cell==19 then
+--					if cell==17 or cell==19 then
+					if cell==17 then
 						if rnd(1)<0.05 then
 							makeactor(enums.item,0,49,a,b)
 						elseif rnd(1)<0.05 then
@@ -374,10 +367,13 @@ function _draw()
 		end
 	end
 	if debugs then
-								color(12)
 		for a=1,#debug_s do
 			dsc=8
-			if player then
+			if crawler then
+				if crawler.step==a then
+					dsc=10
+				end
+			elseif player then
 				if player.step==a then
 					dsc=12
 				end
@@ -490,8 +486,11 @@ function debug_u()
 
 --	debug_l[5]="step:"..actors[1].step
 
-	for a=1,#steps do
-		debug_s[a]=steps[a][1].." "..steps[a][2]
+	if debugs then
+		debug_s={}
+		for a=1,#steps do
+			debug_s[a]=steps[a][1].." "..steps[a][2]
+		end
 	end
 end
 __gfx__
