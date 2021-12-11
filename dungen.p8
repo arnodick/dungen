@@ -10,7 +10,6 @@ debugs=false
 
 enums={}
 --actor types
-enums.itemcrawler=-2
 enums.crawler=-1
 enums.player=1
 enums.enemy=2
@@ -28,7 +27,6 @@ function _init()
 	enums.rand=2
 	enums.auto=3
 	enums.target=4
-	enums.path=5
 	
 	--game states
 	enums.title=1
@@ -75,12 +73,8 @@ function makeactor(t,mt,s,x,y,w,h,sp,an)
 	actor.weapon.equip=0x0
 	actor.weapon.x=actor.x+actor.movex
 	actor.weapon.xoff=-8
-	if t==enums.itemcrawler then
-		actor.path={}
-		add(crawlers,actor)
-	else
-		add(actors,actor)
-	end
+
+	add(actors,actor)
 	return actor
 end
 
@@ -233,20 +227,6 @@ function controlactor(a)
 		--check if any adjacent target cells, if so move there and finish steps
 		--else, check if any adjacent nogo cells (17), if so move until find target or stuck
 		-- if stuck, move backwards, removing steps as we go until back at step 0
-	elseif a.mt==enums.path then
-		local ds=getneighbours(17,a.x,a.y)
-		if #ds>0 then
-			for i=1,#ds do
-				if a.x+ds[i][1]==a.path[#a.path][1] and a.y+ds[i][2]==a.path[#a.path][2] then
-					deli(ds,i)
-				end
-			end
-		end
-		if #ds>0 then
-			a.vec=rnd(ds)
-		else
-			a.vec={o,o}
-		end
 	end
 	if a.t==enums.crawler then
 		local cn=checkneighbours(0,18,a.x+a.vec[1],a.y+a.vec[2])--check destination cell for amount of adjacent free spaces
@@ -291,25 +271,6 @@ function controlactor(a)
 				a.y-=steps[a.step+1][2]
 				deli(steps)
 			end
-		end
-	elseif a.t==enums.itemcrawler then
-		local m=mget(a.x+a.vec[1],a.y+a.vec[2])
-		local cn=checkneighbours(17,0,a.x+a.vec[1],a.y+a.vec[2])
-		if cn==0 then
---			mset(a.x,a.y,19)
-			a.path={}
-			a.x=a.sx
-			a.y=a.sy
-		elseif cn==-1 then
-		--	mset(a.x+a.vec[1],a.y+a.vec[2],19)
-			add(a.path,{a.x+a.vec[1],a.y+a.vec[2]})
-			del(crawlers,a)
-		elseif m==17 then
---		if cn>=1 then
---			mset(a.x,a.y,19)
-			add(a.path,{a.x+a.vec[1],a.y+a.vec[2]})
-			a.x+=a.vec[1]
-			a.y+=a.vec[2]
 		end
 	elseif a.t==enums.player then
 		if a.movex==0 and a.movey==0 then
@@ -459,17 +420,6 @@ function _update()
 		player=makeactor(enums.player,mget(127,31),97,spawn.x,spawn.y,1,2,8,1)
 		sfx(2)
 		pass+=1
-		--[[
-	elseif pass==3 then
-	--just control 1 crawler here, remove it when it is done
-		foreach(crawlers,controlactor)
---		controlactor(crawlers[#crawlers])
-		if #crawlers<=0 then
-			player=makeactor(enums.player,mget(127,31),97,spawn.x,spawn.y,1,2,8,1)
-			pass+=1
-		end
-		--]]
---	elseif pass==4 then
 	elseif pass==3 then
 		foreach(actors,controlactor)
 		foreach(transitions,controltransition)
@@ -488,7 +438,6 @@ function _draw()
 --	pal(1,3)
 	map(0,0,0,0,16,16)
 	foreach(actors,drawactor)
-	foreach(crawlers,drawactor)
 	foreach(facades,drawfacade)
 	foreach(transitions,drawtransition)
 	if debug then
@@ -545,7 +494,6 @@ function changestate(s)
 	cam.shake=0
 	
 	actors={}
-	crawlers={}
 	facades={}
 	transitions={}
 	introtext={}
@@ -605,24 +553,23 @@ function debug_u()
 	debug_l[2]="mem="..stat(0)
 	debug_l[3]="cpu="..stat(1)
 	debug_l[4]="actors:"..#actors
-	debug_l[5]="crawlers:"..#crawlers
 	if player!=nil then
-		debug_l[6]="plr x:"..player.x
-		debug_l[7]="plr y:"..player.y
-		debug_l[8]="plr step:"..player.step
+		debug_l[5]="plr x:"..player.x
+		debug_l[6]="plr y:"..player.y
+		debug_l[7]="plr step:"..player.step
 		if player.target then
-			debug_l[9]="plr target:"..player.target.x.." "..player.target.y
+			debug_l[8]="plr target:"..player.target.x.." "..player.target.y
 		else
-			debug_l[9]="plr target: none"
+			debug_l[8]="plr target: none"
 		end
 	end
 --	debug_l[7]=mget(127,31)
-	debug_l[10]="tr:"..#transitions
-	debug_l[11]="sc1:"..score[1]
-	debug_l[12]="sc2:"..score[2]
-	debug_l[13]="sc3:"..score[3]
-	debug_l[14]="steps: "..#steps
-	debug_l[15]="spawn: "..spawn.x.." "..spawn.y
+	debug_l[9]="tr:"..#transitions
+	debug_l[10]="sc1:"..score[1]
+	debug_l[11]="sc2:"..score[2]
+	debug_l[12]="sc3:"..score[3]
+	debug_l[13]="steps: "..#steps
+	debug_l[14]="spawn: "..spawn.x.." "..spawn.y
 
 --	debug_l[5]="step:"..actors[1].step
 
