@@ -6,10 +6,11 @@ __lua__
 --by ashley pringle
 cartdata("dungen")
 debug=false
-debugs=true
+debugs=false
 
 enums={}
 --actor types
+enums.itemcrawler=-2
 enums.crawler=-1
 enums.player=1
 enums.enemy=2
@@ -26,6 +27,8 @@ function _init()
 	enums.key=1
 	enums.rand=2
 	enums.auto=3
+	enums.target=4
+	enums.path=5
 	
 	--game states
 	enums.title=1
@@ -60,17 +63,24 @@ function makeactor(t,mt,s,x,y,w,h,sp,an)
 	actor.an=an or 0
 	actor.vec={0,0}
 	actor.step=0
-	--if actor.t==enums.player then
-	--	actor.step=1
-	--end
+	if actor.t==enums.player then
+		actor.steps=steps
+	end
 	actor.movex=0
 	actor.movey=0
+	actor.sx=x
+	actor.sy=y
 	actor.right=false--todo: get rid of this
 	actor.weapon={}
 	actor.weapon.equip=0x0
 	actor.weapon.x=actor.x+actor.movex
 	actor.weapon.xoff=-8
-	add(actors,actor)
+	if t==enums.itemcrawler then
+		actor.path={}
+		add(crawlers,actor)
+	else
+		add(actors,actor)
+	end
 	return actor
 end
 
@@ -105,15 +115,34 @@ function direction(d)
 	return dire
 end
 
+function vectodir(v)
+	if v[1]==-1 then
+		return 0
+	elseif v[1]==1 then
+		return 1
+	elseif v[2]==-1 then
+		return 2
+	elseif v[2]==1 then
+		return 3
+	end
+	return -1
+end
+
 -- returns count of free spaces around a cell
--- -1=exit found
+-- -1=destination found
 -- 0 - 4 = amount of adj spaces that are 0 or no-go
-function checkneighbours(ch,x,y)
+function checkneighbours(ch,dest,x,y)
 	local cell=mget(x,y)
 --	if cell==ch or cell==17 or cell==19 then--if cell at centre of check is 0 or no-go, return 4
-	if cell==ch or cell==17 then--if cell at centre of check is 0 or no-go, return 4
+	if cell==ch
+	or cell==17
+	or cell==3
+	or cell==4
+	or cell==5
+	or cell==6
+	then--if cell at centre of check is 0 or no-go, return 4
 		return 4--if this cell is 0 or no-go, return highest adj count (4)
-	elseif cell==18 then--18=exit found
+	elseif cell==dest then--18=exit found
 		return -1
 	end
 	local adj=0
@@ -123,6 +152,10 @@ function checkneighbours(ch,x,y)
 		local cell=mget(x+dire[1],y+dire[2])
 		if cell==ch--if adj cell is 0 or no-go, add 1 to return adj count
 		or cell==17
+		or cell==3
+		or cell==4
+		or cell==5
+		or cell==6
 --		or cell==19
 		then
 			adj+=1
@@ -138,16 +171,43 @@ function checkstuck(ch,x,y)
 	local routes=4
 	for i=0,3 do
 		local dire=direction(i)
-		if checkneighbours(ch,x+dire[1],y+dire[2])>=2 then
+		if checkneighbours(ch,18,x+dire[1],y+dire[2])>=2 then
 			routes-=1
 		end
 	end
 	return routes
 end
 
+function getneighbours(ch,x,y)
+	local dires={}
+	for i=0,3 do
+		local dire=direction(i)
+		if mget(x+dire[1],y+dire[2])==ch then
+			add(dires,dire)
+		end
+	end
+	return dires
+end
+
+function dist(x,y,x2,y2)
+	local xd=x2-x
+	local yd=y2-y
+	return sqrt(xd*xd+yd+yd)
+end
+
+function stepforw(a)
+	a.step+=1
+	a.vec[1]=a.steps[a.step][1]
+	a.vec[2]=a.steps[a.step][2]
+end
+
+function stepback(a)
+end
+
 function controlactor(a)
 	if a.mt==enums.key then
-		a.vec[1]=0 a.vec[2]=0
+		a.vec[1]=0
+		a.vec[2]=0
 		if     btn(0) then a.vec[1]=-1
 		elseif btn(1) then a.vec[1]= 1
 		elseif btn(2) then a.vec[2]=-1
@@ -157,38 +217,70 @@ function controlactor(a)
 	elseif a.mt==enums.rand then
 		a.vec=direction(flr(rnd(4)))
 	elseif a.mt==enums.auto then
-		a.vec[1]=0 a.vec[2]=0
+		a.vec[1]=0
+		a.vec[2]=0
+		--or just put if #targetseps>0 then
+		--if target and #targetsteps>0 then
+		--stepforward(targetsteps)
+		--elseif !target and #targetsteps>0 then
+		--stepback(targetsteps)
 		if a.step<#steps then
 			if a.movex==0 and a.movey==0 then
-				a.step+=1
-				a.vec[1]=steps[a.step][1]
-				a.vec[2]=steps[a.step][2]
+				stepforw(a)
 			end
+		end
+	elseif a.mt==enums.target then
+		--check if any adjacent target cells, if so move there and finish steps
+		--else, check if any adjacent nogo cells (17), if so move until find target or stuck
+		-- if stuck, move backwards, removing steps as we go until back at step 0
+	elseif a.mt==enums.path then
+		local ds=getneighbours(17,a.x,a.y)
+		if #ds>0 then
+			for i=1,#ds do
+				if a.x+ds[i][1]==a.path[#a.path][1] and a.y+ds[i][2]==a.path[#a.path][2] then
+					deli(ds,i)
+				end
+			end
+		end
+		if #ds>0 then
+			a.vec=rnd(ds)
+		else
+			a.vec={o,o}
 		end
 	end
 	if a.t==enums.crawler then
-		local cn=checkneighbours(0,a.x+a.vec[1],a.y+a.vec[2])--check destination cell for amount of adjacent free spaces
-		if cn==-1 then--exit found, add this final step, move to next pass (item creation?) and remove crawler
+		local cn=checkneighbours(0,18,a.x+a.vec[1],a.y+a.vec[2])--check destination cell for amount of adjacent free spaces
+		if cn==-1 then--exit found, add this final step, and remove crawler (once crawler is gone, we move to next pass)
 			add(steps,a.vec)
-			pass+=1
 			del(actors,crawler)
 			crawler=nil
 		elseif cn<2 then--there is 0 or 1 empty adjacent cells, move crawler to dest and set dest cell to 0 (free space)
 			sfx(1)
+		
+			--stepforw(a)	
 			a.x+=a.vec[1]
 			a.y+=a.vec[2]
+			a.step+=1
+						
 			mset(a.x,a.y,0)
 			if mget(a.x,a.y-1)==1 then--if the cell above the new free space is solid, make it into a wall cell
 				mset(a.x,a.y-1,2)
 			end
-			a.step+=1
 			if a.step>#steps then
 				add(steps,a.vec)
-	--		else
-			--	steps[a.step]={a.vec[1],a.vec[2]}--can this cause problems? should we do {vec1,vec2}?
 			end
 		elseif checkstuck(0,a.x,a.y)<=0 then--if there are no vialbe routes, set cell to dead end (17)
-			mset(a.x,a.y,17)
+			local ne=getneighbours(17,a.x,a.y)
+			local ne3=getneighbours(3,a.x,a.y)
+			local ne4=getneighbours(4,a.x,a.y)
+			local ne5=getneighbours(5,a.x,a.y)
+			local ne6=getneighbours(6,a.x,a.y)
+			if #ne==0 and #ne3==0 and #ne4==0 and #ne5==0 and #ne6==0 then
+				mset(a.x,a.y,17)
+			else
+				local v=steps[a.step]
+				mset(a.x,a.y,3+vectodir(v))
+			end
 			a.step-=1--set step back to last step
 			if a.step<=0 then--exit couldn't be found
 				sfx(4)
@@ -199,6 +291,25 @@ function controlactor(a)
 				a.y-=steps[a.step+1][2]
 				deli(steps)
 			end
+		end
+	elseif a.t==enums.itemcrawler then
+		local m=mget(a.x+a.vec[1],a.y+a.vec[2])
+		local cn=checkneighbours(17,0,a.x+a.vec[1],a.y+a.vec[2])
+		if cn==0 then
+--			mset(a.x,a.y,19)
+			a.path={}
+			a.x=a.sx
+			a.y=a.sy
+		elseif cn==-1 then
+		--	mset(a.x+a.vec[1],a.y+a.vec[2],19)
+			add(a.path,{a.x+a.vec[1],a.y+a.vec[2]})
+			del(crawlers,a)
+		elseif m==17 then
+--		if cn>=1 then
+--			mset(a.x,a.y,19)
+			add(a.path,{a.x+a.vec[1],a.y+a.vec[2]})
+			a.x+=a.vec[1]
+			a.y+=a.vec[2]
 		end
 	elseif a.t==enums.player then
 		if a.movex==0 and a.movey==0 then
@@ -220,9 +331,9 @@ function controlactor(a)
 			end
 		end
 	elseif a.t==enums.enemy then
-		if a.x==player.x and a.y==player.y then
+--		if a.x==player.x and a.y==player.y then
 --			del(actors,player)
-		end
+--		end
 		if timer%a.sp==0 then
 			if mget(a.x+a.vec[1],a.y+a.vec[2])==0 then
 				a.x+=a.vec[1]
@@ -244,6 +355,11 @@ function controlactor(a)
 			sfx(5)
 			score[a.s-48]+=1
 			del(actors,a)
+--			elseif inporximity(player,3) then
+--player.target=a
+--player.targetsteps=a.steps
+		elseif dist(player.x,player.y,a.x,a.y)<=3 then
+			player.target=a
 		end
 	elseif a.t==enums.ladder then
 		if player.x==a.x and player.y==a.y then
@@ -287,61 +403,78 @@ function damageactor(a,d)
 end
 
 function _update()
-	if timer%speed==0 then
-		if pass==1 then
-			foreach(actors,controlactor)
-		elseif pass==2 then
-			for b=0,15 do
-				for a=0,15 do
-					local cell=mget(a,b)
---					if cell==17 or cell==19 then
-					if cell==17 then
-						if rnd(1)<0.05 then
-							makeactor(enums.item,0,49,a,b)
-						elseif rnd(1)<0.05 then
-							makeactor(enums.item,0,50,a,b)
-						elseif rnd(1)<0.05 then
-							makeactor(enums.item,0,51,a,b)
-						elseif rnd(1)<0.05 then
-							makeactor(2,enums.rand,65,a,b,1,2,20,1)
-						end
-						mset(a,b,0)
-					elseif cell==2 then
-						if checkneighbours(0,a,b)==4 then
-							if rnd(1)<0.5 then
-								mset(a,b,0)
-							end
-						end
-					elseif cell==18 then
-						mset(a,b,0)
-						mset(a,b+1,0)
-						makeactor(4,0,28,a,b,1,2)
+	if pass==1 then
+		foreach(actors,controlactor)
+		if crawler==nil then
+			pass+=1
+		end
+	elseif pass==2 then
+		for b=0,15 do
+			for a=0,15 do
+				local cell=mget(a,b)
+				if cell==17 or cell==3 or cell==4 or cell==5 or cell==6 then
+					if rnd(1)<0.05 then
+					--maybe use flags here to set direction player goes to find items?
+						makeactor(enums.item,0,49,a,b)
+--						makeactor(-2,5,16,a,b)
+--						makeactor(enums'crawler,enums.cr)
+						--make crawler that finds first no-go cell (17?) and traces it steps to a.steps
+						--use .taret movement type, give it target of 0 (empty cell that isn't no-go)
+						--then a.steps can be assigned to player.targetsteps whne in proximity
+						--idea! only do this in the dark? if in light, just go towards neareset item always, no need for prox
+					elseif rnd(1)<0.05 then
+						makeactor(enums.item,0,50,a,b)
+--					makeactor(-2,5,16,a,b)
+					elseif rnd(1)<0.05 then
+						makeactor(enums.item,0,51,a,b)
+--						makeactor(-2,5,16,a,b)
+					elseif rnd(1)<0.05 then
+						makeactor(2,enums.rand,65,a,b,1,2,20,1)
 					end
-					cell=mget(a,b)
-					if cell==2 or cell==1 then
-						if a!=spawn.x or b!=spawn.y then
-							makefacade(a,b-1)
-						else
+--					mset(a,b,0)
+				elseif cell==2 then--if cell is facade surrounded by nothing, get rid of it (sometimes?)
+					if checkneighbours(0,18,a,b)==4 then
+						if rnd(1)<0.5 then
 							mset(a,b,0)
-							if mget(a,b-1)==1 then
-								mset(a,b-1,2)
-							end
 						end
 					end
-					
+				elseif cell==18 then--if cell is ladder, set it and cell above to 0, make ladder actor
+					mset(a,b,0)
+					mset(a,b+1,0)
+					makeactor(4,0,28,a,b,1,2)
+				end
+				cell=mget(a,b)
+				if cell==2 or cell==1 then--if cell is wall, make facade
+					if a!=spawn.x or b!=spawn.y then
+						makefacade(a,b-1)
+					else
+						mset(a,b,0)
+						if mget(a,b-1)==1 then
+							mset(a,b-1,2)
+						end
+					end
 				end
 			end
-			player=makeactor(enums.player,mget(127,31),97,spawn.x,spawn.y,1,2,8,1)
-			sfx(2)
-			pass+=1
-		elseif pass==3 then
-			foreach(actors,controlactor)
-			foreach(transitions,controltransition)
-			if btnp(4) then
-				--changestate(state)
-			end
 		end
+		player=makeactor(enums.player,mget(127,31),97,spawn.x,spawn.y,1,2,8,1)
+		sfx(2)
+		pass+=1
+		--[[
+	elseif pass==3 then
+	--just control 1 crawler here, remove it when it is done
+		foreach(crawlers,controlactor)
+--		controlactor(crawlers[#crawlers])
+		if #crawlers<=0 then
+			player=makeactor(enums.player,mget(127,31),97,spawn.x,spawn.y,1,2,8,1)
+			pass+=1
+		end
+		--]]
+--	elseif pass==4 then
+	elseif pass==3 then
+		foreach(actors,controlactor)
+		foreach(transitions,controltransition)
 	end
+
 	timer+=1
 	if debug or debugs then
 		debug_u()
@@ -355,6 +488,7 @@ function _draw()
 --	pal(1,3)
 	map(0,0,0,0,16,16)
 	foreach(actors,drawactor)
+	foreach(crawlers,drawactor)
 	foreach(facades,drawfacade)
 	foreach(transitions,drawtransition)
 	if debug then
@@ -403,7 +537,6 @@ end
 function changestate(s)
 	state=s
 	timer=0
-	speed=1
 	pass=1
 	steps={}
 	debug_l={}
@@ -412,6 +545,7 @@ function changestate(s)
 	cam.shake=0
 	
 	actors={}
+	crawlers={}
 	facades={}
 	transitions={}
 	introtext={}
@@ -471,18 +605,24 @@ function debug_u()
 	debug_l[2]="mem="..stat(0)
 	debug_l[3]="cpu="..stat(1)
 	debug_l[4]="actors:"..#actors
+	debug_l[5]="crawlers:"..#crawlers
 	if player!=nil then
-		debug_l[5]="plr x:"..player.x
-		debug_l[6]="plr y:"..player.y
-		debug_l[7]="plr step:"..player.step
+		debug_l[6]="plr x:"..player.x
+		debug_l[7]="plr y:"..player.y
+		debug_l[8]="plr step:"..player.step
+		if player.target then
+			debug_l[9]="plr target:"..player.target.x.." "..player.target.y
+		else
+			debug_l[9]="plr target: none"
+		end
 	end
 --	debug_l[7]=mget(127,31)
-	debug_l[8]="tr:"..#transitions
-	debug_l[9]="sc1:"..score[1]
-	debug_l[10]="sc2:"..score[2]
-	debug_l[11]="sc3:"..score[3]
-	debug_l[12]="steps: "..#steps
-	debug_l[13]="spawn: "..spawn.x.." "..spawn.y
+	debug_l[10]="tr:"..#transitions
+	debug_l[11]="sc1:"..score[1]
+	debug_l[12]="sc2:"..score[2]
+	debug_l[13]="sc3:"..score[3]
+	debug_l[14]="steps: "..#steps
+	debug_l[15]="spawn: "..spawn.x.." "..spawn.y
 
 --	debug_l[5]="step:"..actors[1].step
 
@@ -494,21 +634,21 @@ function debug_u()
 	end
 end
 __gfx__
-00000000313313313133133100000007666666666666666666666666000000006666666600000000111111115555555500000000111111111111111100000000
-00000000111111111111111170070000565565565655655616116116000000005655655600000000313313311511511500000000313313313133133100000000
-00000000133133130202020200070000666666666666666666666666000000006666666600000000111111115555555500000000111111111111111100000000
-00000000111111110020202000777777655655656556556561161161000000006556556500000000133133135115115111111111202020201331331300000000
-00000000313313310202020207007007666666666666666666666666000000006666666600000000111111115555555531331331020202021111111100000000
-00000000111111112020202000777077505050505655655650505050000000005151515100000000202020201020102011111111202020203133133100000000
-00000000133133130202020000070070505050506666666650505050000000005151515100000000020202022010201013313313020202021111111100000000
-00000000111111112020202007777770000000006556556544444444000000004444444400000000202020201020102011111111202020201331331300000000
+00000000313313313133133100000000000000000000000000000000000000006666666600000000111111115555555500000000111111111111111100000000
+00000000111111111111111100080000000080000008000000008000000000005655655600000000313313311511511500000000313313313133133100000000
+00000000133133130202020200800000000008000088800000008000000000006666666600000000111111115555555500000000111111111111111100000000
+00000000111111110020202008888880088888800808080000008000000000006556556500000000133133135115115111111111202020201331331300000000
+00000000313313310202020200800000000008000008000000808080000000006666666600000000111111115555555531331331020202021111111100000000
+00000000111111112020202000080000000080000008000000088800000000005151515100000000202020201020102011111111202020203133133100000000
+00000000133133130202020000000000000000000008000000008000000000005151515100000000020202022010201013313313020202021111111100000000
+00000000111111112020202000000000000000000000000000000000000000004444444400000000202020201020102011111111202020201331331300000000
 00000000000000001111111100000000cccccccc002222006666666600000000494444948888888800d00d000d0000d000000000000000001111111100000000
-008888000000000012222221000000000c00c00c0020020056556556000000004994499408008008002dd20002dddd2000000000000000223133133100000000
-08000000000000001000000100000000cccccccc0022220066666666000000009449944988888888012222101222222100000000000022051111111100000000
-00888000000000001d0000d100000000c00c00c00020020065565565000000004444944980080080012002101200002100000000002205052020202000000000
-000008000008000012dddd2100090000cccccccc002222006666666600000000444499998888888801222210122222210d0000d0220505050202020200000000
-000008000000000012222221000000000c00c00c0020020000000000000000009449994408008008012002101200002102dddd20050505052020202000000000
-08888000000000001111111100000000cccccccc0000000000000000000000009994494488888888011111101111111102222220050505000202020200000000
+00bbbb000000000012222221000000000c00c00c0020020056556556000000004994499408008008002dd20002dddd2000000000000000223133133100000000
+0b000000008888001000000100999900cccccccc0022220066666666000000009449944988888888012222101222222100000000000022051111111100000000
+00bbb000008008001d0000d100900900c00c00c00020020065565565000000004444944980080080012002101200002100000000002205052020202000000000
+00000b000080080012dddd2100900900cccccccc002222006666666600000000444499998888888801222210122222210d0000d0220505050202020200000000
+00000b000088880012222221009999000c00c00c0020020000000000000000009449994408008008012002101200002102dddd20050505052020202000000000
+0bbbb000000000001111111100000000cccccccc0000000000000000000000009994494488888888011111101111111102222220050505000202020200000000
 00000000000000002222222200000000c00c00c00000000000000000000000009944449980080080022222202222222202000020050500002020202000000000
 00000000888888887777777733333333888888880404040400000000555555558888888802020202000000004944449412dddd21111111110000000000000000
 00000000989989980700700703003003989989984040404000000000151151159899899820202020000000004994499412222221122121210000000000000000
