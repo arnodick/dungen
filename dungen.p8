@@ -16,22 +16,22 @@ enums.enemy=2
 enums.item=3
 enums.ladder=4
 
+--movement types
+enums.key=1
+enums.rand=2
+enums.auto=3
+enums.target=4
+
+--game states
+enums.title=1
+enums.options=2
+enums.game=3
+
 function _init()
 	state=0
 	timer=0
 	changestate(state)
 	score={0,0,0}
-	
-	--movement types
-	enums.key=1
-	enums.rand=2
-	enums.auto=3
-	enums.target=4
-	
-	--game states
-	enums.title=1
-	enums.options=2
-	enums.game=3
 	
 	hud={}
 	hud.bar={}
@@ -49,33 +49,36 @@ function _init()
 end
 
 function makeactor(t,mt,s,x,y,w,h,sp,an)
-	local actor={}
-	actor.t=t
-	actor.mt=mt
-	actor.s=s
-	actor.x=x
-	actor.y=y
-	actor.w=w or 1
-	actor.h=h or 1
-	actor.sp=sp or 1
-	actor.an=an or 0
-	actor.vec={0,0}
-	actor.step=0
-	if actor.t==enums.player then
-		actor.steps=steps
+	local a={}
+	a.t=t
+	a.mt=mt
+	a.s=s
+	a.x=x
+	a.y=y
+	a.w=w or 1
+	a.h=h or 1
+	a.sp=sp or 1
+	a.an=an or 0
+	a.vec={0,0}
+	a.step=0
+	if a.t==enums.player then
+		a.steps=steps
+		a.steps.step=0
+		a.tempsteps={}
+		a.tempsteps.step=0
 	end
-	actor.movex=0
-	actor.movey=0
-	actor.sx=x
-	actor.sy=y
-	actor.right=false--todo: get rid of this
-	actor.weapon={}
-	actor.weapon.equip=0x0
-	actor.weapon.x=actor.x+actor.movex
-	actor.weapon.xoff=-8
+	a.movex=0
+	a.movey=0
+	a.sx=x
+	a.sy=y
+	a.right=false--todo: get rid of this
+	a.weapon={}
+	a.weapon.equip=0x0
+	a.weapon.x=a.x+a.movex
+	a.weapon.xoff=-8
 
-	add(actors,actor)
-	return actor
+	add(actors,a)
+	return a
 end
 
 function makefacade(x,y)
@@ -189,13 +192,20 @@ function dist(x,y,x2,y2)
 	return sqrt(xd*xd+yd+yd)
 end
 
-function stepforw(a)
-	a.step+=1
-	a.vec[1]=a.steps[a.step][1]
-	a.vec[2]=a.steps[a.step][2]
+function stepforw(a,s)
+	if a.movex==0 and a.movey==0 then
+		s.step+=1
+		a.vec[1]=s[s.step][1]
+		a.vec[2]=s[s.step][2]
+	end
 end
 
-function stepback(a)
+function stepback(a,s)
+	if a.movex==0 and a.movey==0 then
+		a.vec[1]=-s[s.step][1]
+		a.vec[2]=-s[s.step][2]
+		s.step-=1
+	end
 end
 
 function controlactor(a)
@@ -213,14 +223,39 @@ function controlactor(a)
 	elseif a.mt==enums.auto then
 		a.vec[1]=0
 		a.vec[2]=0
-		--or just put if #targetseps>0 then
-		--if target and #targetsteps>0 then
-		--stepforward(targetsteps)
-		--elseif !target and #targetsteps>0 then
-		--stepback(targetsteps)
-		if a.step<#steps then
-			if a.movex==0 and a.movey==0 then
-				stepforw(a)
+
+		if a.movex==0 and a.movey==0 then
+			local ne=getneighbours(17,a.x,a.y)
+			local ne3=getneighbours(3,a.x,a.y)
+			local ne4=getneighbours(4,a.x,a.y)
+			local ne5=getneighbours(5,a.x,a.y)
+			local ne6=getneighbours(6,a.x,a.y)
+			if (#ne>0 and #ne3==0 and #ne4==0 and #ne5==0 and #ne6==0 and a.back==nil) or a.back then
+				a.back=true
+				if #a.tempsteps>0 then
+					--check if any nex here, if so and desire taret (item/enemy) then turn off back and go down new temp path
+					stepback(a,a.tempsteps)
+					deli(a.tempsteps)
+				else
+					a.back=nil
+					for i=1,#ne do
+						mset(a.x+ne[i][1],a.y+ne[i][2],0)
+					end
+				end
+			elseif #ne3>0 and not a.back then
+				add(a.tempsteps,direction(0))
+				stepforw(a,a.tempsteps)
+			elseif #ne4>0 and not a.back then
+				add(a.tempsteps,direction(1))
+				stepforw(a,a.tempsteps)
+			elseif #ne5>0 and not a.back then
+				add(a.tempsteps,direction(2))
+				stepforw(a,a.tempsteps)
+			elseif #ne6>0 and not a.back then
+				add(a.tempsteps,direction(3))
+				stepforw(a,a.tempsteps)
+			elseif a.steps.step<#steps then
+				stepforw(a,a.steps)
 			end
 		end
 	elseif a.mt==enums.target then
@@ -237,7 +272,6 @@ function controlactor(a)
 		elseif cn<2 then--there is 0 or 1 empty adjacent cells, move crawler to dest and set dest cell to 0 (free space)
 			sfx(1)
 		
-			--stepforw(a)	
 			a.x+=a.vec[1]
 			a.y+=a.vec[2]
 			a.step+=1
@@ -274,11 +308,15 @@ function controlactor(a)
 		end
 	elseif a.t==enums.player then
 		if a.movex==0 and a.movey==0 then
-			if mget(a.x+a.vec[1],a.y+a.vec[2])==0 then
+--			if mget(a.x+a.vec[1],a.y+a.vec[2])==0 then
 				a.x+=a.vec[1]
 				a.y+=a.vec[2]
 				a.movex=-a.vec[1]
 				a.movey=-a.vec[2]
+				if mget(a.x,a.y)!=0 then
+					mset(a.x,a.y,0)
+				end
+				--[[
 				if a.vec[1]>0 then
 					a.right=true
 						a.weapon.xoff=8
@@ -286,11 +324,9 @@ function controlactor(a)
 					a.right=false
 					a.weapon.xoff=-8
 				end
---		else
---			a.movex=0
---			a.movey=0
+				--]]
 			end
-		end
+--		end
 	elseif a.t==enums.enemy then
 --		if a.x==player.x and a.y==player.y then
 --			del(actors,player)
@@ -316,11 +352,8 @@ function controlactor(a)
 			sfx(5)
 			score[a.s-48]+=1
 			del(actors,a)
---			elseif inporximity(player,3) then
---player.target=a
---player.targetsteps=a.steps
-		elseif dist(player.x,player.y,a.x,a.y)<=3 then
-			player.target=a
+--		elseif dist(player.x,player.y,a.x,a.y)<=3 then
+--			player.target=a
 		end
 	elseif a.t==enums.ladder then
 		if player.x==a.x and player.y==a.y then
@@ -375,20 +408,11 @@ function _update()
 				local cell=mget(a,b)
 				if cell==17 or cell==3 or cell==4 or cell==5 or cell==6 then
 					if rnd(1)<0.05 then
-					--maybe use flags here to set direction player goes to find items?
 						makeactor(enums.item,0,49,a,b)
---						makeactor(-2,5,16,a,b)
---						makeactor(enums'crawler,enums.cr)
-						--make crawler that finds first no-go cell (17?) and traces it steps to a.steps
-						--use .taret movement type, give it target of 0 (empty cell that isn't no-go)
-						--then a.steps can be assigned to player.targetsteps whne in proximity
-						--idea! only do this in the dark? if in light, just go towards neareset item always, no need for prox
 					elseif rnd(1)<0.05 then
 						makeactor(enums.item,0,50,a,b)
---					makeactor(-2,5,16,a,b)
 					elseif rnd(1)<0.05 then
 						makeactor(enums.item,0,51,a,b)
---						makeactor(-2,5,16,a,b)
 					elseif rnd(1)<0.05 then
 						makeactor(2,enums.rand,65,a,b,1,2,20,1)
 					end
@@ -434,19 +458,17 @@ end
 function _draw()
 	cls()
 	camera(cam[1],cam[2])
---	pal(5,1)
---	pal(1,3)
 	map(0,0,0,0,16,16)
 	foreach(actors,drawactor)
 	foreach(facades,drawfacade)
 	foreach(transitions,drawtransition)
 	if debug then
 		for a=1,#debug_l do
-			print(debug_l[a],cam[1]+0,cam[2]+(a-1)*6,8)
+			print(debug_l[a],cam[1]+0,cam[2]+(a-1)*6,12)
 		end
 		for a=1,#actors do
 			local ac=actors[a]
-			rect(ac.x*8,ac.y*8,ac.x*8+8,ac.y*8+8,8)
+			rect(ac.x*8,ac.y*8,ac.x*8+8,ac.y*8+8,12)
 		end
 	end
 	if debugs then
@@ -464,19 +486,6 @@ function _draw()
 			print(a.." "..debug_s[a],cam[1]+flr(a/22)*35,cam[2]+(a-1)*6-flr(a/22)*127,dsc)
 		end
 	end
-end
-
-function clamp(v,mi,ma,h)
-	if h then
-		if v<mi then v=mi
-		elseif v>ma then v=ma
-		end
-	else
-		if v<mi then v=ma
-		elseif v>ma then v=mi
-		end
-	end
-	return v
 end
 
 function rndint(n)
@@ -537,13 +546,14 @@ function controltransition(t)
 end
 
 function drawtransition(t)
+	--fillp(0b0011001111001100.1)
 	for a=0,#t.blocks-1 do
 		if t.blocks[a+1]==true then
 			--rectfill(a*32,flr(a/4)*32,a*32+32,flr(a/4)*32+32,14)
 			local mult=128/sqrt(#t.blocks)
 			local x=(a%sqrt(#t.blocks))*mult
 			local y=flr(a/sqrt(#t.blocks))*mult
-			rectfill(x,y,x+mult,y+mult,0)
+			rectfill(x,y,x+mult,y+mult,1)
 		end
 	end
 end
@@ -556,15 +566,20 @@ function debug_u()
 	if player!=nil then
 		debug_l[5]="plr x:"..player.x
 		debug_l[6]="plr y:"..player.y
-		debug_l[7]="plr step:"..player.step
+--		debug_l[7]="plr step:"..player.step
+		debug_l[7]="plr step "..player.steps.step
+		debug_l[8]="plr temp steps "..#player.tempsteps
+		debug_l[9]="plr temp step "..player.tempsteps.step
+		--[[
 		if player.target then
 			debug_l[8]="plr target:"..player.target.x.." "..player.target.y
 		else
 			debug_l[8]="plr target: none"
 		end
+		--]]
 	end
 --	debug_l[7]=mget(127,31)
-	debug_l[9]="tr:"..#transitions
+--	debug_l[9]="tr:"..#transitions
 	debug_l[10]="sc1:"..score[1]
 	debug_l[11]="sc2:"..score[2]
 	debug_l[12]="sc3:"..score[3]
